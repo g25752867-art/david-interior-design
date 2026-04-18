@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>David室内设计 - 客服</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body { font-family: -apple-system, sans-serif; background: #f5f5f5; display: flex; flex-direction: column; }
+.header { background: #2c2c2c; color: white; padding: 16px 20px; text-align: center; flex-shrink: 0; }
+.header h1 { font-size: 18px; font-weight: 500; }
+.header p { font-size: 12px; color: #aaa; margin-top: 4px; }
+.chat-box { flex: 1; display: flex; flex-direction: column; max-width: 600px; margin: 0 auto; width: 100%; background: white; overflow: hidden; }
+.messages { flex: 1; overflow-y: auto; padding: 20px; }
+.message { margin-bottom: 16px; display: flex; }
+.message.user { justify-content: flex-end; }
+.bubble { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6; }
+.message.bot .bubble { background: #f0f0f0; color: #333; border-radius: 2px 12px 12px 12px; }
+.message.user .bubble { background: #2c2c2c; color: white; border-radius: 12px 2px 12px 12px; }
+.message.user .bubble img { max-width: 150px; border-radius: 8px; margin-top: 8px; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.message.bot .avatar { background: #e8d5b0; margin-right: 8px; }
+.message.user .avatar { background: #555; margin-left: 8px; color: white; }
+.typing { color: #999; font-size: 13px; padding: 0 20px; min-height: 20px; }
+.input-area { border-top: 1px solid #eee; padding: 12px; display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; }
+.input-wrapper { flex: 1; display: flex; gap: 8px; align-items: flex-end; }
+.input-area input[type="text"] { flex: 1; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; font-size: 14px; outline: none; }
+.input-area input[type="text"]:focus { border-color: #2c2c2c; }
+.input-area input[type="file"] { display: none; }
+.file-btn { width: 40px; height: 40px; border: 1px solid #ddd; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: white; font-size: 18px; flex-shrink: 0; }
+.file-btn:hover { background: #f5f5f5; }
+.input-area button { background: #2c2c2c; color: white; border: none; border-radius: 8px; padding: 10px 16px; cursor: pointer; font-size: 14px; flex-shrink: 0; white-space: nowrap; }
+.image-preview { max-width: 60px; max-height: 60px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>David 室内设计</h1>
+  <p>专业设计师团队 · 客服咨询</p>
+</div>
+<div class="chat-box">
+  <div class="messages" id="messages"></div>
+  <div class="typing" id="typing"></div>
+  <div class="input-area">
+    <div class="input-wrapper">
+      <label class="file-btn" title="上传图片">
+        📷
+        <input type="file" id="fileInput" accept="image/*">
+      </label>
+      <input type="text" id="input" placeholder="装修需求...">
+      <img id="preview" class="image-preview" style="display:none;">
+    </div>
+    <button id="sendbtn">发送</button>
+  </div>
+</div>
+<script>
+var selectedFile = null;
+
+function addMessage(role, text, imageUrl) {
+  var messages = document.getElementById("messages");
+  var div = document.createElement("div");
+  div.className = "message " + role;
+  var avatar = role === "bot" ? "D" : "我";
+  if (role === "bot") {
+    div.innerHTML = '<div class="avatar">' + avatar + '</div><div class="bubble">' + text.replace(/\n/g, "<br>") + '</div>';
+  } else {
+    var html = '<div class="bubble">' + text.replace(/\n/g, "<br>");
+    if (imageUrl) {
+      html += '<img src="' + imageUrl + '" style="max-width:150px; border-radius:8px; margin-top:8px;">';
+    }
+    html += '</div><div class="avatar">' + avatar + '</div>';
+    div.innerHTML = html;
+  }
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function loadHistory() {
+  fetch("/get-history")
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.history && data.history.length > 0) {
+        data.history.forEach(function(msg) {
+          if (msg.role === "user") {
+            addMessage("user", msg.content);
+          } else if (msg.role === "assistant") {
+            addMessage("bot", msg.content);
+          }
+        });
+      } else {
+        addMessage("bot", "您好！欢迎来到 David 室内设计 🏠\n\n我是David客服，请问您有什么装修需求？可以告诉我房子的面积、预算和喜欢的风格，也可以上传参考图片～");
+      }
+    });
+}
+
+function sendMessage() {
+  var input = document.getElementById("input");
+  var msg = input.value.trim();
+  if (!msg && !selectedFile) return;
+  
+  var textContent = msg || "(发送了一张图片)";
+  
+  if (selectedFile) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      addMessage("user", textContent, e.target.result);
+      sendToServer(msg, e.target.result);
+      input.value = "";
+      selectedFile = null;
+      document.getElementById("preview").style.display = "none";
+    };
+    reader.readAsDataURL(selectedFile);
+  } else {
+    addMessage("user", textContent);
+    sendToServer(msg, null);
+    input.value = "";
+  }
+}
+
+function sendToServer(text, imageBase64) {
+  document.getElementById("typing").innerText = "客服正在输入...";
+  var payload = { message: text };
+  if (imageBase64) {
+    payload.image = imageBase64;
+  }
+  fetch("/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    document.getElementById("typing").innerText = "";
+    addMessage("bot", data.reply);
+  })
+  .catch(function() {
+    document.getElementById("typing").innerText = "";
+    addMessage("bot", "抱歉，系统出现问题，请稍后再试。");
+  });
+}
+
+document.getElementById("input").addEventListener("keypress", function(e) {
+  if (e.key === "Enter") sendMessage();
+});
+
+document.getElementById("sendbtn").addEventListener("click", function() {
+  sendMessage();
+});
+
+document.getElementById("fileInput").addEventListener("change", function(e) {
+  if (e.target.files.length > 0) {
+    selectedFile = e.target.files[0];
+    var preview = document.getElementById("preview");
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      preview.src = e.target.result;
+      preview.style.display = "block";
+    };
+    reader.readAsDataURL(selectedFile);
+  }
+});
+
+loadHistory();
+</script>
+</body>
+</html>
