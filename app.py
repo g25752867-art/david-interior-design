@@ -10,36 +10,11 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from wechatpy.enterprise import WeChatClient
 from wechatpy.enterprise.crypto import WeChatCrypto
-from sqlalchemy import create_engine, Column, String, Text, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from datetime import datetime
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = "david-interior-design-secret-key-12345"
-
-# 数据库配置
-db_url = os.getenv("DATABASE_URL", "sqlite:///chat_data.db")
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
-engine = create_engine(db_url, echo=False)
-Session = sessionmaker(bind=engine)
-Base = declarative_base()
-
-class UserData(Base):
-    __tablename__ = "user_data"
-    user_id = Column(String(100), primary_key=True)
-    history = Column(Text, default="[]")
-    customer_info = Column(Text, default="{}")
-    first_visit = Column(String(10), default="true")
-    industry = Column(String(50), default="interior_design")
-    model = Column(String(50), default="claude-sonnet-4-6")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-Base.metadata.create_all(engine)
 
 client = None
 
@@ -198,38 +173,40 @@ PROMPT_TEMPLATES = {
 USERS_FILE = "users_data.json"
 
 def load_user_data(user_id):
-    """从数据库加载用户数据"""
-    db_session = Session()
+    """从文件加载用户数据"""
     try:
-        user = db_session.query(UserData).filter_by(user_id=user_id).first()
-        if user:
-            return {
-                "history": json.loads(user.history),
-                "customer_info": json.loads(user.customer_info),
-                "first_visit": user.first_visit == "true",
-                "industry": user.industry,
-                "model": user.model
-            }
-        return None
-    finally:
-        db_session.close()
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                all_data = json.load(f)
+                return all_data.get(user_id)
+    except:
+        pass
+    return None
 
 def save_user_data(user_id, data):
-    """保存用户数据到数据库"""
-    db_session = Session()
+    """保存用户数据到文件"""
     try:
-        user = db_session.query(UserData).filter_by(user_id=user_id).first()
-        if not user:
-            user = UserData(user_id=user_id)
-        user.history = json.dumps(data.get("history", []), ensure_ascii=False)
-        user.customer_info = json.dumps(data.get("customer_info", {}), ensure_ascii=False)
-        user.first_visit = "true" if data.get("first_visit", True) else "false"
-        user.industry = data.get("industry", "interior_design")
-        user.model = data.get("model", "claude-sonnet-4-6")
-        db_session.add(user)
-        db_session.commit()
-    finally:
-        db_session.close()
+        all_data = {}
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                all_data = json.load(f)
+        all_data[user_id] = data
+        with open(USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(all_data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving user data: {e}")
+
+def load_users_data():
+    """加载所有用户数据"""
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_users_data(users_data):
+    """保存所有用户数据"""
+    with open(USERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(users_data, f, ensure_ascii=False, indent=2)
 
 def get_session_id():
     if 'session_id' not in session:
