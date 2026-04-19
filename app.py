@@ -11,10 +11,17 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = "david-interior-design-secret-key-12345"
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url=os.getenv("API_BASE_URL")
-)
+client = None
+
+def get_client():
+    global client
+    if client is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        base_url = os.getenv("API_BASE_URL")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
+        client = OpenAI(api_key=api_key, base_url=base_url)
+    return client
 
 USERS_FILE = "users_data.json"
 
@@ -98,7 +105,7 @@ def chat():
     
     messages.append({"role": "user", "content": user_content})
     
-    response = client.chat.completions.create(
+    response = get_client().chat.completions.create(
         model="claude-sonnet-4-6",
         messages=messages
     )
@@ -158,4 +165,5 @@ def reset():
 
 if __name__ == "__main__":
     print("David室内设计客服启动中...")
-    app.run(port=5001, debug=False)
+    port = int(os.getenv("PORT", 5001))
+    app.run(host="0.0.0.0", port=port, debug=False)
