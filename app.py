@@ -434,6 +434,10 @@ def get_customers():
             })
     return jsonify({"customers": customers})
 
+@app.route("/admin", methods=["GET"])
+def admin_page():
+    return send_from_directory(".", "admin.html")
+
 @app.route("/crm", methods=["GET"])
 def crm_page():
     return send_from_directory(".", "crm.html")
@@ -483,6 +487,55 @@ def generate_quote():
         "quote": {
             "customer_name": customer_info.get("name", ""),
             "content": quote_content,
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+    })
+
+@app.route("/api/generate-contract", methods=["POST"])
+def generate_contract():
+    data = request.json
+    customer_id = data.get("customer_id")
+    quote_content = data.get("quote_content", "")
+    users_data = load_users_data()
+    
+    if customer_id not in users_data:
+        return jsonify({"error": "Customer not found"}), 404
+    
+    customer_info = users_data[customer_id].get("customer_info", {})
+    
+    # 使用 AI 生成合同
+    prompt = f"""基于以下信息，生成一份专业的室内设计服务合同：
+
+客户名称：{customer_info.get('name', '未知')}
+联系电话：{customer_info.get('phone', '未知')}
+项目地址：{customer_info.get('area', '未知')}
+
+报价内容：
+{quote_content}
+
+请生成包含以下内容的合同：
+1. 合同双方信息
+2. 项目范围和内容
+3. 费用及付款方式
+4. 工期和交付时间
+5. 双方权利和义务
+6. 违约责任
+7. 争议解决
+8. 合同生效条款
+
+格式要求：专业、完整、法律规范"""
+
+    response = get_client().chat.completions.create(
+        model="claude-sonnet-4-6",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    
+    contract_content = response.choices[0].message.content
+    
+    return jsonify({
+        "contract": {
+            "customer_name": customer_info.get("name", ""),
+            "content": contract_content,
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
         }
     })
