@@ -132,6 +132,8 @@ def chat():
     
     return jsonify({"reply": reply, "customer_info": customer_info})
 
+
+
 @app.route("/get-history", methods=["GET"])
 def get_history():
     session_id = get_session_id()
