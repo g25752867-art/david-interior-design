@@ -8,6 +8,8 @@ from io import BytesIO
 from flask import Flask, request, jsonify, send_from_directory, session
 from dotenv import load_dotenv
 from openai import OpenAI
+from wechatpy.enterprise import WeChatClient
+from wechatpy.enterprise.crypto import WeChatCrypto
 
 load_dotenv()
 
@@ -25,6 +27,28 @@ def get_client():
             raise ValueError("OPENAI_API_KEY environment variable is not set")
         client = OpenAI(api_key=api_key, base_url=base_url)
     return client
+
+wechat_client = None
+wechat_crypto = None
+
+def get_wechat_client():
+    global wechat_client
+    if wechat_client is None:
+        corp_id = os.getenv("WECHAT_CORP_ID")
+        secret = os.getenv("WECHAT_SECRET")
+        if corp_id and secret:
+            wechat_client = WeChatClient(corp_id, secret)
+    return wechat_client
+
+def get_wechat_crypto():
+    global wechat_crypto
+    if wechat_crypto is None:
+        token = os.getenv("WECHAT_TOKEN")
+        encoding_aes_key = os.getenv("WECHAT_ENCODING_AES_KEY")
+        corp_id = os.getenv("WECHAT_CORP_ID")
+        if token and encoding_aes_key and corp_id:
+            wechat_crypto = WeChatCrypto(token, encoding_aes_key, corp_id)
+    return wechat_crypto
 
 def compress_image(image_base64, max_size_kb=500):
     """压缩图像到指定大小"""
@@ -314,6 +338,99 @@ def set_industry():
     users_data[session_id]["industry"] = industry
     save_users_data(users_data)
     return jsonify({"status": "ok", "industry": industry})
+
+@app.route("/wechat", methods=["GET", "POST"])
+def wechat_callback():
+    if request.method == "GET":
+        # 验证 URL
+        signature = request.args.get("msg_signature")
+        timestamp = request.args.get("timestamp")
+        nonce = request.args.get("nonce")
+        echostr = request.args.get("echostr")
+        
+        crypto = get_wechat_crypto()
+        if not crypto:
+            return "Missing WeChat config", 400
+        
+        try:
+            echo_str = crypto.check_signature(signature, timestamp, nonce, echostr)
+            return echo_str
+        except Exception as e:
+            return f"Signature check failed: {e}", 403
+    
+    else:
+        # 处理消息
+        signature = request.args.get("msg_signature")
+        timestamp = request.args.get("timestamp")
+        nonce = request.args.get("nonce")
+        
+        crypto = get_wechat_crypto()
+        if not crypto:
+            return "Missing WeChat config", 400
+        
+        try:
+            msg = crypto.decrypt_message(request.data, signature, timestamp, nonce)
+            from wechatpy.enterprise import parse_message
+            msg_obj = parse_message(msg)
+            
+            # 处理文本消息
+            if msg_obj.type == "text":
+                user_id = msg_obj.source
+                content = msg_obj.content
+                
+                # 调用 AI 获取回复
+                users_data = load_users_data()
+                if user_id not in users_data:
+                    users_data[user_id] = {
+                        "history": [],
+                        "customer_info": {"wechat_user_id": user_id},
+                        "first_visit": True,
+                        "industry": "interior_design"
+                    }
+                
+                user_data = users_data[user_id]
+                conversation_history = user_data["history"]
+                conversation_history.append({"role": "user", "content": content})
+                
+                greeting = ""
+                if not user_data["first_visit"] and user_data["customer_info"].get("name"):
+                    name = user_data["customer_info"].get("name", "")
+                    surname = name[0] if name else ""
+                    greeting = f"\n\n重要：回头客户，姓{surname}。用姓氏敬称问候，回顾需求。"
+                
+                industry = user_data.get("industry", "interior_design")
+                template = PROMPT_TEMPLATES.get(industry, PROMPT_TEMPLATES["interior_design"])
+                system_msg = template["system_prompt"].format(greeting=greeting)
+                
+                messages = [{"role": "system", "content": system_msg}]
+                for msg_item in conversation_history[:-1]:
+                    messages.append(msg_item)
+                messages.append({"role": "user", "content": content})
+                
+                response = get_client().chat.completions.create(
+                    model=user_data.get("model", "claude-sonnet-4-6"),
+                    messages=messages
+                )
+                
+                reply = response.choices[0].message.content
+                conversation_history.append({"role": "assistant", "content": reply})
+                user_data["first_visit"] = False
+                users_data[user_id] = user_data
+                save_users_data(users_data)
+                
+                # 发送回复
+                client = get_wechat_client()
+                if client:
+                    client.message.send_text(
+                        agent_id=os.getenv("WECHAT_AGENT_ID"),
+                        user_id=user_id,
+                        content=reply
+                    )
+            
+            return "ok"
+        except Exception as e:
+            print(f"WeChat error: {e}")
+            return "error", 500
 
 if __name__ == "__main__":
     print("David室内设计客服启动中...")
