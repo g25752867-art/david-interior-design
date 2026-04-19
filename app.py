@@ -442,6 +442,51 @@ def crm_page():
 def workflow_page():
     return send_from_directory(".", "workflow.html")
 
+@app.route("/api/generate-quote", methods=["POST"])
+def generate_quote():
+    data = request.json
+    customer_id = data.get("customer_id")
+    users_data = load_users_data()
+    
+    if customer_id not in users_data:
+        return jsonify({"error": "Customer not found"}), 404
+    
+    customer_info = users_data[customer_id].get("customer_info", {})
+    
+    # 使用 AI 生成报价
+    prompt = f"""基于以下客户信息，生成一份专业的室内设计报价单：
+
+客户名称：{customer_info.get('name', '未知')}
+预算范围：{customer_info.get('budget', '未知')}
+设计风格：{customer_info.get('style', '未知')}
+空间信息：{customer_info.get('space_info', '未知')}
+设计需求：{customer_info.get('design_needs', '未知')}
+
+请生成包含以下内容的报价单：
+1. 项目概述
+2. 设计方案说明
+3. 费用明细（测量费、设计费、施工监理费等）
+4. 总报价金额
+5. 有效期（7天）
+6. 付款方式（50%+30%+20%）
+
+格式要求：清晰、专业、易于理解"""
+
+    response = get_client().chat.completions.create(
+        model="claude-sonnet-4-6",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    
+    quote_content = response.choices[0].message.content
+    
+    return jsonify({
+        "quote": {
+            "customer_name": customer_info.get("name", ""),
+            "content": quote_content,
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+    })
+
 @app.route("/wechat", methods=["GET", "POST"])
 def wechat_callback():
     print(f"WeChat callback received: method={request.method}")

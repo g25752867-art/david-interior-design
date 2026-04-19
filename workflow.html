@@ -166,7 +166,10 @@
         <div class="content">
             <!-- 报价管理 -->
             <div id="quotes" class="tab-content active">
-                <button class="btn" onclick="openQuoteModal()">创建报价</button>
+                <div style="margin-bottom: 15px;">
+                    <button class="btn" onclick="openQuoteModal()">手动创建报价</button>
+                    <button class="btn btn-secondary" onclick="generateQuoteFromCustomer()">从客户信息生成报价</button>
+                </div>
                 <ul class="workflow-list" id="quotesList"></ul>
             </div>
             <!-- 合同管理 -->
@@ -439,6 +442,56 @@
 
         function saveToLocalStorage() {
             localStorage.setItem('workflows', JSON.stringify(workflows));
+        }
+
+        async function generateQuoteFromCustomer() {
+            // 获取客户列表
+            try {
+                const response = await fetch('/api/customers');
+                const data = await response.json();
+                const customers = data.customers || [];
+                
+                if (customers.length === 0) {
+                    alert('没有客户信息，请先在 CRM 中添加客户');
+                    return;
+                }
+                
+                // 选择第一个有完整信息的客户
+                const customer = customers.find(c => c.name && c.budget) || customers[0];
+                
+                if (!customer.name) {
+                    alert('客户信息不完整，请先完善客户信息');
+                    return;
+                }
+                
+                // 调用 API 生成报价
+                const quoteResponse = await fetch('/api/generate-quote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customer_id: customer.id })
+                });
+                
+                const quoteData = await quoteResponse.json();
+                
+                if (quoteData.quote) {
+                    const quote = {
+                        id: Date.now(),
+                        name: quoteData.quote.customer_name,
+                        amount: customer.budget,
+                        description: quoteData.quote.content,
+                        validity: 7,
+                        status: 'pending',
+                        createdAt: quoteData.quote.created_at
+                    };
+                    workflows.quotes.push(quote);
+                    saveToLocalStorage();
+                    renderQuotes();
+                    alert('报价已生成！');
+                }
+            } catch (error) {
+                console.error('Error generating quote:', error);
+                alert('生成报价失败，请重试');
+            }
         }
 
         function loadWorkflows() {
