@@ -369,6 +369,32 @@ def set_industry():
     save_users_data(users_data)
     return jsonify({"status": "ok", "industry": industry})
 
+@app.route("/api/customers", methods=["GET"])
+def get_customers():
+    users_data = load_users_data()
+    customers = []
+    for user_id, user_data in users_data.items():
+        customer_info = user_data.get("customer_info", {})
+        if customer_info.get("name") or customer_info.get("phone"):
+            customers.append({
+                "id": user_id,
+                "name": customer_info.get("name", ""),
+                "phone": customer_info.get("phone", ""),
+                "wechat": customer_info.get("wechat", ""),
+                "area": customer_info.get("area", ""),
+                "budget": customer_info.get("budget", ""),
+                "style": customer_info.get("style", ""),
+                "layout": customer_info.get("layout", ""),
+                "requirements": customer_info.get("requirements", ""),
+                "history": user_data.get("history", []),
+                "created_at": user_data.get("created_at", "")
+            })
+    return jsonify({"customers": customers})
+
+@app.route("/crm", methods=["GET"])
+def crm_page():
+    return send_from_directory(".", "crm.html")
+
 @app.route("/wechat", methods=["GET", "POST"])
 def wechat_callback():
     print(f"WeChat callback received: method={request.method}")
