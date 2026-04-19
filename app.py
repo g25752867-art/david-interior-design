@@ -1,4 +1,3 @@
-cat > ~/desktop/ai-test/app.py << 'EOF'
 import os
 import json
 import time
@@ -90,8 +89,7 @@ def chat():
         surname = name[0] if name else ""
         greeting = "\n\n重要：回头客户，姓" + surname + "。用姓氏敬称问候，回顾需求。"
     
-    system_msg = "你是David室内设计客服助理。" + greeting + 
-"\n\n【流程】第一步：上门测量500元（不退）。第二步：免费方案（基础平面图+参考图）。第三步：签合同。第四步：分阶段付款（50%+30%+20%）。\n\n【图片】分析风格、颜色、材质、氛围。用专业设计语言。\n\n【职责】热情接待，逐步了解需求，不重复问，上传图片时分析，引导留联系方式，语气专业亲切。\n\n【提取信息】用[JSON]{...}[/JSON]包含：name、phone、wechat、area、budget、style、layout、requirements"
+    system_msg = "你是David室内设计客服助理。" + greeting + "\n\n【流程】第一步：上门测量500元（不退）。第二步：免费方案（基础平面图+参考图）。第三步：签合同。第四步：分阶段付款（50%+30%+20%）。\n\n【图片】分析风格、颜色、材质、氛围。用专业设计语言。\n\n【职责】热情接待，逐步了解需求，不重复问，上传图片时分析，引导留联系方式，语气专业亲切。\n\n【提取信息】用[JSON]{...}[/JSON]包含：name、phone、wechat、area、budget、style、layout、requirements"
     
     messages = [{"role": "system", "content": system_msg}]
     
@@ -161,4 +159,3 @@ def reset():
 if __name__ == "__main__":
     print("David室内设计客服启动中...")
     app.run(port=5001, debug=False)
-EOF
