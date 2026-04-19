@@ -2,6 +2,9 @@ import os
 import json
 import time
 import uuid
+import base64
+import hashlib
+from io import BytesIO
 from flask import Flask, request, jsonify, send_from_directory, session
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -22,6 +25,122 @@ def get_client():
             raise ValueError("OPENAI_API_KEY environment variable is not set")
         client = OpenAI(api_key=api_key, base_url=base_url)
     return client
+
+def compress_image(image_base64, max_size_kb=500):
+    """压缩图像到指定大小"""
+    try:
+        from PIL import Image
+        # 解码 base64
+        image_data = base64.b64decode(image_base64.split(',')[1] if ',' in image_base64 else image_base64)
+        img = Image.open(BytesIO(image_data))
+        
+        # 转换为 RGB（如果是 RGBA）
+        if img.mode in ('RGBA', 'LA', 'P'):
+            rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+            rgb_img.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            img = rgb_img
+        
+        # 压缩
+        quality = 85
+        while True:
+            buffer = BytesIO()
+            img.save(buffer, format='JPEG', quality=quality, optimize=True)
+            size_kb = len(buffer.getvalue()) / 1024
+            if size_kb <= max_size_kb or quality <= 30:
+                break
+            quality -= 5
+        
+        # 编码回 base64
+        buffer.seek(0)
+        compressed = base64.b64encode(buffer.getvalue()).decode()
+        return f"data:image/jpeg;base64,{compressed}"
+    except Exception as e:
+        print(f"Image compression error: {e}")
+        return image_base64
+
+def get_image_hash(image_base64):
+    """获取图像哈希值用于去重"""
+    try:
+        image_data = base64.b64decode(image_base64.split(',')[1] if ',' in image_base64 else image_base64)
+        return hashlib.md5(image_data).hexdigest()
+    except:
+        return None
+
+# 提示模板库
+PROMPT_TEMPLATES = {
+    "interior_design": {
+        "name": "室内设计顾问",
+        "system_prompt": """你是David室内设计客服助理。{greeting}
+
+【核心职责】
+- 热情专业的设计咨询
+- 逐步了解客户需求，不重复提问
+- 引导客户留下联系方式
+- 语气专业亲切，用设计术语
+
+【服务流程】
+1. 上门测量：500元（不退）
+2. 免费方案：基础平面图+参考图
+3. 签订合同
+4. 分阶段付款：50% + 30% + 20%
+
+【图片分析指南】
+当客户上传图片时，进行以下分析：
+- 【风格识别】：现代、简约、北欧、工业、新中式、美式、法式等
+- 【色彩分析】：主色调、辅助色、色彩搭配方案
+- 【材质识别】：木材、金属、玻璃、石材、布艺等材质应用
+- 【空间布局】：功能分区、动线设计、采光利用
+- 【设计亮点】：值得借鉴的设计元素和创意
+- 【改进建议】：基于客户需求的优化方案
+
+【信息提取】
+分析对话中的客户信息，用以下格式提取：
+[JSON]{{"name":"","phone":"","wechat":"","area":"","budget":"","style":"","layout":"","requirements":""}}[/JSON]
+
+【禁止事项】
+- 不要重复已问过的问题
+- 不要给出具体报价（除了测量费500元）
+- 不要承诺无法实现的设计"""
+    },
+    "real_estate": {
+        "name": "房产顾问",
+        "system_prompt": """你是房产销售顾问。{greeting}
+
+【核心职责】
+- 专业的房产咨询
+- 了解客户需求和预算
+- 推荐合适的房源
+- 引导看房和签约
+
+【服务流程】
+1. 了解需求：位置、面积、预算、用途
+2. 推荐房源：3-5个合适选项
+3. 安排看房
+4. 协助签约
+
+【信息提取】
+[JSON]{{"name":"","phone":"","wechat":"","location":"","budget":"","area":"","purpose":"","timeline":""}}[/JSON]"""
+    },
+    "consulting": {
+        "name": "商业顾问",
+        "system_prompt": """你是商业咨询顾问。{greeting}
+
+【核心职责】
+- 提供专业的商业建议
+- 分析客户的业务需求
+- 制定解决方案
+- 跟进项目进展
+
+【服务流程】
+1. 需求分析
+2. 方案设计
+3. 实施计划
+4. 效果评估
+
+【信息提取】
+[JSON]{{"name":"","phone":"","wechat":"","company":"","industry":"","challenge":"","budget":"","timeline":""}}[/JSON]"""
+    }
+}
 
 USERS_FILE = "users_data.json"
 
@@ -67,6 +186,16 @@ def chat():
     is_first_visit = user_data["first_visit"]
     
     if image_data:
+        # 压缩图像
+        compressed_image = compress_image(image_data)
+        
+        # 检查是否重复上传
+        image_hash = get_image_hash(compressed_image)
+        if not user_data.get("uploaded_images"):
+            user_data["uploaded_images"] = []
+        
+        is_duplicate = image_hash in user_data.get("uploaded_images", [])
+        
         user_content = [
             {
                 "type": "text",
@@ -75,10 +204,15 @@ def chat():
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": image_data
+                    "url": compressed_image
                 }
             }
         ]
+        
+        # 记录上传的图像
+        if image_hash and not is_duplicate:
+            user_data["uploaded_images"].append(image_hash)
+        
         conversation_history.append({
             "role": "user",
             "content": user_message if user_message else "[客户上传了参考图片]"
@@ -96,7 +230,10 @@ def chat():
         surname = name[0] if name else ""
         greeting = "\n\n重要：回头客户，姓" + surname + "。用姓氏敬称问候，回顾需求。"
     
-    system_msg = "你是David室内设计客服助理。" + greeting + "\n\n【流程】第一步：上门测量500元（不退）。第二步：免费方案（基础平面图+参考图）。第三步：签合同。第四步：分阶段付款（50%+30%+20%）。\n\n【图片】分析风格、颜色、材质、氛围。用专业设计语言。\n\n【职责】热情接待，逐步了解需求，不重复问，上传图片时分析，引导留联系方式，语气专业亲切。\n\n【提取信息】用[JSON]{...}[/JSON]包含：name、phone、wechat、area、budget、style、layout、requirements"
+    # 获取行业类型，默认为室内设计
+    industry = user_data.get("industry", "interior_design")
+    template = PROMPT_TEMPLATES.get(industry, PROMPT_TEMPLATES["interior_design"])
+    system_msg = template["system_prompt"].format(greeting=greeting)
     
     messages = [{"role": "system", "content": system_msg}]
     
@@ -105,8 +242,9 @@ def chat():
     
     messages.append({"role": "user", "content": user_content})
     
+    model = user_data.get("model", "claude-sonnet-4-6")
     response = get_client().chat.completions.create(
-        model="claude-sonnet-4-6",
+        model=model,
         messages=messages
     )
     
@@ -164,6 +302,18 @@ def reset():
         del users_data[session_id]
         save_users_data(users_data)
     return jsonify({"status": "ok"})
+
+@app.route("/set-industry", methods=["POST"])
+def set_industry():
+    session_id = get_session_id()
+    data = request.json
+    industry = data.get("industry", "interior_design")
+    users_data = load_users_data()
+    if session_id not in users_data:
+        users_data[session_id] = {"history": [], "customer_info": {}, "first_visit": True}
+    users_data[session_id]["industry"] = industry
+    save_users_data(users_data)
+    return jsonify({"status": "ok", "industry": industry})
 
 if __name__ == "__main__":
     print("David室内设计客服启动中...")
