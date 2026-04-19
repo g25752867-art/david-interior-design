@@ -376,71 +376,82 @@ def wechat_callback():
         
         crypto = get_wechat_crypto()
         if not crypto:
-            return "Missing WeChat config", 400
+            print("Missing WeChat config")
+            return "ok"
         
         try:
             msg = crypto.decrypt_message(request.data, signature, timestamp, nonce)
             from wechatpy.enterprise import parse_message
             msg_obj = parse_message(msg)
+            print(f"Message type: {msg_obj.type}, content: {msg_obj.content if hasattr(msg_obj, 'content') else 'N/A'}")
             
-            # 处理文本消息
+            # 立即返回 ok，避免超时
+            # 在后台处理消息
             if msg_obj.type == "text":
-                user_id = msg_obj.source
-                content = msg_obj.content
-                
-                # 调用 AI 获取回复
-                users_data = load_users_data()
-                if user_id not in users_data:
-                    users_data[user_id] = {
-                        "history": [],
-                        "customer_info": {"wechat_user_id": user_id},
-                        "first_visit": True,
-                        "industry": "interior_design"
-                    }
-                
-                user_data = users_data[user_id]
-                conversation_history = user_data["history"]
-                conversation_history.append({"role": "user", "content": content})
-                
-                greeting = ""
-                if not user_data["first_visit"] and user_data["customer_info"].get("name"):
-                    name = user_data["customer_info"].get("name", "")
-                    surname = name[0] if name else ""
-                    greeting = f"\n\n重要：回头客户，姓{surname}。用姓氏敬称问候，回顾需求。"
-                
-                industry = user_data.get("industry", "interior_design")
-                template = PROMPT_TEMPLATES.get(industry, PROMPT_TEMPLATES["interior_design"])
-                system_msg = template["system_prompt"].format(greeting=greeting)
-                
-                messages = [{"role": "system", "content": system_msg}]
-                for msg_item in conversation_history[:-1]:
-                    messages.append(msg_item)
-                messages.append({"role": "user", "content": content})
-                
-                response = get_client().chat.completions.create(
-                    model=user_data.get("model", "claude-sonnet-4-6"),
-                    messages=messages
-                )
-                
-                reply = response.choices[0].message.content
-                conversation_history.append({"role": "assistant", "content": reply})
-                user_data["first_visit"] = False
-                users_data[user_id] = user_data
-                save_users_data(users_data)
-                
-                # 发送回复
-                client = get_wechat_client()
-                if client:
-                    client.message.send_text(
-                        agent_id=os.getenv("WECHAT_AGENT_ID"),
-                        user_id=user_id,
-                        content=reply
+                try:
+                    user_id = msg_obj.source
+                    content = msg_obj.content
+                    print(f"Processing message from {user_id}: {content}")
+                    
+                    # 调用 AI 获取回复
+                    users_data = load_users_data()
+                    if user_id not in users_data:
+                        users_data[user_id] = {
+                            "history": [],
+                            "customer_info": {"wechat_user_id": user_id},
+                            "first_visit": True,
+                            "industry": "interior_design"
+                        }
+                    
+                    user_data = users_data[user_id]
+                    conversation_history = user_data["history"]
+                    conversation_history.append({"role": "user", "content": content})
+                    
+                    greeting = ""
+                    if not user_data["first_visit"] and user_data["customer_info"].get("name"):
+                        name = user_data["customer_info"].get("name", "")
+                        surname = name[0] if name else ""
+                        greeting = f"\n\n重要：回头客户，姓{surname}。用姓氏敬称问候，回顾需求。"
+                    
+                    industry = user_data.get("industry", "interior_design")
+                    template = PROMPT_TEMPLATES.get(industry, PROMPT_TEMPLATES["interior_design"])
+                    system_msg = template["system_prompt"].format(greeting=greeting)
+                    
+                    messages = [{"role": "system", "content": system_msg}]
+                    for msg_item in conversation_history[:-1]:
+                        messages.append(msg_item)
+                    messages.append({"role": "user", "content": content})
+                    
+                    print("Calling AI...")
+                    response = get_client().chat.completions.create(
+                        model=user_data.get("model", "claude-sonnet-4-6"),
+                        messages=messages
                     )
+                    
+                    reply = response.choices[0].message.content
+                    print(f"AI reply: {reply[:100]}")
+                    conversation_history.append({"role": "assistant", "content": reply})
+                    user_data["first_visit"] = False
+                    users_data[user_id] = user_data
+                    save_users_data(users_data)
+                    
+                    # 发送回复
+                    client = get_wechat_client()
+                    if client:
+                        print(f"Sending reply to {user_id}")
+                        client.message.send_text(
+                            agent_id=os.getenv("WECHAT_AGENT_ID"),
+                            user_id=user_id,
+                            content=reply
+                        )
+                        print("Reply sent")
+                except Exception as e:
+                    print(f"Error processing message: {e}")
             
             return "ok"
         except Exception as e:
             print(f"WeChat error: {e}")
-            return "error", 500
+            return "ok"
 
 if __name__ == "__main__":
     print("David室内设计客服启动中...")
