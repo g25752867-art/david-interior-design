@@ -219,7 +219,31 @@
                         </div>
                         <div class="form-group">
                             <div class="form-field">
-                                <label>需求</label>
+                                <label>空间信息</label>
+                                <textarea id="customerSpaceInfo" readonly></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="form-field">
+                                <label>设计需求</label>
+                                <textarea id="customerDesignNeeds" readonly></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="form-field">
+                                <label>时间计划</label>
+                                <textarea id="customerTimeline" readonly></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="form-field">
+                                <label>特殊需求</label>
+                                <textarea id="customerSpecialNeeds" readonly></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="form-field">
+                                <label>综合需求</label>
                                 <textarea id="customerRequirements" readonly></textarea>
                             </div>
                         </div>
@@ -274,6 +298,10 @@
             document.getElementById('customerArea').value = customer.area || '';
             document.getElementById('customerBudget').value = customer.budget || '';
             document.getElementById('customerStyle').value = customer.style || '';
+            document.getElementById('customerSpaceInfo').value = customer.space_info || '';
+            document.getElementById('customerDesignNeeds').value = customer.design_needs || '';
+            document.getElementById('customerTimeline').value = customer.timeline || '';
+            document.getElementById('customerSpecialNeeds').value = customer.special_needs || '';
             document.getElementById('customerRequirements').value = customer.requirements || '';
             
             renderConversationHistory(customer.history || []);

@@ -121,9 +121,44 @@ PROMPT_TEMPLATES = {
 - 【设计亮点】：值得借鉴的设计元素和创意
 - 【改进建议】：基于客户需求的优化方案
 
+【需求整理框架】
+根据对话内容，系统整理以下需求信息：
+1. 【空间信息】
+   - 房屋类型：新房/二手房/出租房
+   - 建筑面积、户型、楼层
+   - 装修范围：全屋/局部/单间
+
+2. 【设计需求】
+   - 整体风格偏好
+   - 色彩搭配要求
+   - 特殊功能需求（如开放式厨房、书房等）
+   - 材料偏好
+
+3. 【预算信息】
+   - 总预算范围
+   - 优先投入区域
+   - 成本控制要求
+
+4. 【时间计划】
+   - 装修周期要求
+   - 入住时间
+   - 施工时间限制
+
+5. 【特殊需求】
+   - 环保要求
+   - 智能家居需求
+   - 其他特殊要求
+
 【信息提取】
-分析对话中的客户信息，用以下格式提取：
-[JSON]{{"name":"","phone":"","wechat":"","area":"","budget":"","style":"","layout":"","requirements":""}}[/JSON]
+每次对话后，提取并更新客户信息，用以下格式：
+[JSON]{{"name":"","phone":"","wechat":"","area":"","budget":"","style":"","layout":"","requirements":"","space_info":"","design_needs":"","timeline":"","special_needs":""}}[/JSON]
+
+requirements 字段应包含：
+- 空间信息：[具体描述]
+- 设计需求：[具体描述]
+- 预算范围：[具体金额]
+- 时间计划：[具体时间]
+- 特殊需求：[具体需求]
 
 【禁止事项】
 - 不要重复已问过的问题
@@ -386,6 +421,10 @@ def get_customers():
                 "style": customer_info.get("style", ""),
                 "layout": customer_info.get("layout", ""),
                 "requirements": customer_info.get("requirements", ""),
+                "space_info": customer_info.get("space_info", ""),
+                "design_needs": customer_info.get("design_needs", ""),
+                "timeline": customer_info.get("timeline", ""),
+                "special_needs": customer_info.get("special_needs", ""),
                 "history": user_data.get("history", []),
                 "created_at": user_data.get("created_at", "")
             })
