@@ -345,25 +345,31 @@ def set_industry():
 
 @app.route("/wechat", methods=["GET", "POST"])
 def wechat_callback():
+    print(f"WeChat callback received: method={request.method}")
     if request.method == "GET":
         # 验证 URL
         signature = request.args.get("msg_signature")
         timestamp = request.args.get("timestamp")
         nonce = request.args.get("nonce")
         echostr = request.args.get("echostr")
+        print(f"GET params: signature={signature}, timestamp={timestamp}, nonce={nonce}")
         
         crypto = get_wechat_crypto()
         if not crypto:
+            print("WeChat crypto not initialized")
             return "Missing WeChat config", 400
         
         try:
             echo_str = crypto.check_signature(signature, timestamp, nonce, echostr)
+            print(f"Signature check passed, returning: {echo_str}")
             return echo_str
         except Exception as e:
+            print(f"Signature check failed: {e}")
             return f"Signature check failed: {e}", 403
     
     else:
         # 处理消息
+        print(f"POST data received, size: {len(request.data)}")
         signature = request.args.get("msg_signature")
         timestamp = request.args.get("timestamp")
         nonce = request.args.get("nonce")
