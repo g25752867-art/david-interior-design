@@ -344,11 +344,15 @@ def chat():
     if json_match:
         try:
             info = json.loads(json_match.group(1))
-            customer_info.update(info)
+            # 更新所有字段
+            for key in ["name", "phone", "wechat", "area", "budget", "style", "layout", 
+                       "requirements", "space_info", "design_needs", "timeline", "special_needs"]:
+                if key in info and info[key]:
+                    customer_info[key] = info[key]
             user_data["customer_info"] = customer_info
             reply = reply.replace(json_match.group(0), "").strip()
-        except:
-            pass
+        except Exception as e:
+            print(f"JSON parsing error: {e}")
     
     conversation_history.append({"role": "assistant", "content": reply})
     user_data["first_visit"] = False
@@ -521,8 +525,25 @@ def wechat_callback():
                     
                     reply = response.choices[0].message.content
                     print(f"AI reply: {reply[:100]}")
+                    
+                    # 提取结构化信息
+                    import re
+                    json_match = re.search(r'\[JSON\](.*?)\[/JSON\]', reply)
+                    if json_match:
+                        try:
+                            info = json.loads(json_match.group(1))
+                            for key in ["name", "phone", "wechat", "area", "budget", "style", "layout", 
+                                       "requirements", "space_info", "design_needs", "timeline", "special_needs"]:
+                                if key in info and info[key]:
+                                    customer_info[key] = info[key]
+                            user_data["customer_info"] = customer_info
+                            reply = reply.replace(json_match.group(0), "").strip()
+                        except Exception as e:
+                            print(f"JSON parsing error: {e}")
+                    
                     conversation_history.append({"role": "assistant", "content": reply})
                     user_data["first_visit"] = False
+                    user_data["history"] = conversation_history
                     users_data[user_id] = user_data
                     save_users_data(users_data)
                     
