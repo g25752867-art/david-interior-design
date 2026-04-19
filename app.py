@@ -47,7 +47,11 @@ def get_wechat_crypto():
         encoding_aes_key = os.getenv("WECHAT_ENCODING_AES_KEY")
         corp_id = os.getenv("WECHAT_CORP_ID")
         if token and encoding_aes_key and corp_id:
-            wechat_crypto = WeChatCrypto(token, encoding_aes_key, corp_id)
+            try:
+                wechat_crypto = WeChatCrypto(token, encoding_aes_key, corp_id)
+            except Exception as e:
+                print(f"WeChatCrypto init error: {e}")
+                return None
     return wechat_crypto
 
 def compress_image(image_base64, max_size_kb=500):
