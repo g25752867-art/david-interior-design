@@ -132,12 +132,12 @@ function sendToServer(text, imageBase64) {
   .then(function(res) { return res.json(); })
   .then(function(data) {
     document.getElementById("typing").innerText = "";
-    addMessage("bot", data.reply);
+    addMessage("bot", data.reply, null);
   })
   .catch(function(err) {
     document.getElementById("typing").innerText = "";
     console.error("Error:", err);
-    addMessage("bot", "抱歉，系统出现问题，请稍后再试。");
+    addMessage("bot", "抱歉，系统出现问题，请稍后再试。", null);
   });
 }
 
