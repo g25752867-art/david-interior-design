@@ -438,6 +438,10 @@ def get_customers():
 def crm_page():
     return send_from_directory(".", "crm.html")
 
+@app.route("/workflow", methods=["GET"])
+def workflow_page():
+    return send_from_directory(".", "workflow.html")
+
 @app.route("/wechat", methods=["GET", "POST"])
 def wechat_callback():
     print(f"WeChat callback received: method={request.method}")

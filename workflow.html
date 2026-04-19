@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自动化工作流</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+        }
+        .header h1 { font-size: 24px; }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #eee;
+            padding: 0 20px;
+        }
+        .tab {
+            padding: 15px 20px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            color: #666;
+            font-weight: 500;
+        }
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        .content {
+            padding: 20px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .workflow-list {
+            list-style: none;
+        }
+        .workflow-item {
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            border-left: 4px solid #667eea;
+        }
+        .workflow-item h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .workflow-item p {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .workflow-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .btn:hover { background: #764ba2; }
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        .btn-secondary:hover { background: #e0e0e0; }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status.pending { background: #fff3cd; color: #856404; }
+        .status.completed { background: #d4edda; color: #155724; }
+        .status.failed { background: #f8d7da; color: #721c24; }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal-header {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>自动化工作流</h1>
+        </div>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('quotes')">报价管理</div>
+            <div class="tab" onclick="switchTab('contracts')">合同管理</div>
+            <div class="tab" onclick="switchTab('reminders')">提醒管理</div>
+        </div>
+        <div class="content">
+            <!-- 报价管理 -->
+            <div id="quotes" class="tab-content active">
+                <button class="btn" onclick="openQuoteModal()">创建报价</button>
+                <ul class="workflow-list" id="quotesList"></ul>
+            </div>
+            <!-- 合同管理 -->
+            <div id="contracts" class="tab-content">
+                <button class="btn" onclick="openContractModal()">创建合同</button>
+                <ul class="workflow-list" id="contractsList"></ul>
+            </div>
+            <!-- 提醒管理 -->
+            <div id="reminders" class="tab-content">
+                <button class="btn" onclick="openReminderModal()">创建提醒</button>
+                <ul class="workflow-list" id="remindersList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- 报价模态框 -->
+    <div id="quoteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">创建报价</div>
+            <div class="form-group">
+                <label>客户名称</label>
+                <input type="text" id="quoteName" placeholder="输入客户名称">
+            </div>
+            <div class="form-group">
+                <label>报价金额</label>
+                <input type="number" id="quoteAmount" placeholder="输入报价金额">
+            </div>
+            <div class="form-group">
+                <label>项目描述</label>
+                <textarea id="quoteDescription" placeholder="输入项目描述"></textarea>
+            </div>
+            <div class="form-group">
+                <label>有效期（天）</label>
+                <input type="number" id="quoteValidity" value="7" placeholder="输入有效期">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeQuoteModal()">取消</button>
+                <button class="btn" onclick="saveQuote()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 合同模态框 -->
+    <div id="contractModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">创建合同</div>
+            <div class="form-group">
+                <label>客户名称</label>
+                <input type="text" id="contractName" placeholder="输入客户名称">
+            </div>
+            <div class="form-group">
+                <label>合同金额</label>
+                <input type="number" id="contractAmount" placeholder="输入合同金额">
+            </div>
+            <div class="form-group">
+                <label>合同内容</label>
+                <textarea id="contractContent" placeholder="输入合同内容"></textarea>
+            </div>
+            <div class="form-group">
+                <label>签署日期</label>
+                <input type="date" id="contractDate">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeContractModal()">取消</button>
+                <button class="btn" onclick="saveContract()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提醒模态框 -->
+    <div id="reminderModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">创建提醒</div>
+            <div class="form-group">
+                <label>提醒内容</label>
+                <input type="text" id="reminderContent" placeholder="输入提醒内容">
+            </div>
+            <div class="form-group">
+                <label>提醒时间</label>
+                <input type="datetime-local" id="reminderTime">
+            </div>
+            <div class="form-group">
+                <label>关联客户</label>
+                <input type="text" id="reminderCustomer" placeholder="输入客户名称">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeReminderModal()">取消</button>
+                <button class="btn" onclick="saveReminder()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let workflows = {
+            quotes: [],
+            contracts: [],
+            reminders: []
+        };
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            document.getElementById(tab).classList.add('active');
+            event.target.classList.add('active');
+            loadWorkflows();
+        }
+
+        function openQuoteModal() {
+            document.getElementById('quoteModal').classList.add('active');
+        }
+
+        function closeQuoteModal() {
+            document.getElementById('quoteModal').classList.remove('active');
+        }
+
+        function openContractModal() {
+            document.getElementById('contractModal').classList.add('active');
+        }
+
+        function closeContractModal() {
+            document.getElementById('contractModal').classList.remove('active');
+        }
+
+        function openReminderModal() {
+            document.getElementById('reminderModal').classList.add('active');
+        }
+
+        function closeReminderModal() {
+            document.getElementById('reminderModal').classList.remove('active');
+        }
+
+        function saveQuote() {
+            const quote = {
+                id: Date.now(),
+                name: document.getElementById('quoteName').value,
+                amount: document.getElementById('quoteAmount').value,
+                description: document.getElementById('quoteDescription').value,
+                validity: document.getElementById('quoteValidity').value,
+                status: 'pending',
+                createdAt: new Date().toLocaleString('zh-CN')
+            };
+            workflows.quotes.push(quote);
+            saveToLocalStorage();
+            renderQuotes();
+            closeQuoteModal();
+            document.getElementById('quoteModal').querySelectorAll('input, textarea').forEach(el => el.value = '');
+        }
+
+        function saveContract() {
+            const contract = {
+                id: Date.now(),
+                name: document.getElementById('contractName').value,
+                amount: document.getElementById('contractAmount').value,
+                content: document.getElementById('contractContent').value,
+                date: document.getElementById('contractDate').value,
+                status: 'pending',
+                createdAt: new Date().toLocaleString('zh-CN')
+            };
+            workflows.contracts.push(contract);
+            saveToLocalStorage();
+            renderContracts();
+            closeContractModal();
+            document.getElementById('contractModal').querySelectorAll('input, textarea').forEach(el => el.value = '');
+        }
+
+        function saveReminder() {
+            const reminder = {
+                id: Date.now(),
+                content: document.getElementById('reminderContent').value,
+                time: document.getElementById('reminderTime').value,
+                customer: document.getElementById('reminderCustomer').value,
+                status: 'pending',
+                createdAt: new Date().toLocaleString('zh-CN')
+            };
+            workflows.reminders.push(reminder);
+            saveToLocalStorage();
+            renderReminders();
+            closeReminderModal();
+            document.getElementById('reminderModal').querySelectorAll('input, textarea').forEach(el => el.value = '');
+        }
+
+        function renderQuotes() {
+            const list = document.getElementById('quotesList');
+            list.innerHTML = workflows.quotes.map(q => `
+                <li class="workflow-item">
+                    <h3>${q.name}</h3>
+                    <p>金额：¥${q.amount} | 有效期：${q.validity}天</p>
+                    <p>${q.description}</p>
+                    <p>创建时间：${q.createdAt}</p>
+                    <span class="status ${q.status}">${q.status === 'pending' ? '待处理' : '已完成'}</span>
+                    <div class="workflow-actions">
+                        <button class="btn btn-secondary" onclick="updateQuoteStatus(${q.id})">标记完成</button>
+                        <button class="btn btn-secondary" onclick="deleteQuote(${q.id})">删除</button>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function renderContracts() {
+            const list = document.getElementById('contractsList');
+            list.innerHTML = workflows.contracts.map(c => `
+                <li class="workflow-item">
+                    <h3>${c.name}</h3>
+                    <p>金额：¥${c.amount} | 签署日期：${c.date}</p>
+                    <p>${c.content}</p>
+                    <p>创建时间：${c.createdAt}</p>
+                    <span class="status ${c.status}">${c.status === 'pending' ? '待处理' : '已完成'}</span>
+                    <div class="workflow-actions">
+                        <button class="btn btn-secondary" onclick="updateContractStatus(${c.id})">标记完成</button>
+                        <button class="btn btn-secondary" onclick="deleteContract(${c.id})">删除</button>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function renderReminders() {
+            const list = document.getElementById('remindersList');
+            list.innerHTML = workflows.reminders.map(r => `
+                <li class="workflow-item">
+                    <h3>${r.content}</h3>
+                    <p>客户：${r.customer} | 时间：${r.time}</p>
+                    <p>创建时间：${r.createdAt}</p>
+                    <span class="status ${r.status}">${r.status === 'pending' ? '待处理' : '已完成'}</span>
+                    <div class="workflow-actions">
+                        <button class="btn btn-secondary" onclick="updateReminderStatus(${r.id})">标记完成</button>
+                        <button class="btn btn-secondary" onclick="deleteReminder(${r.id})">删除</button>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function updateQuoteStatus(id) {
+            const quote = workflows.quotes.find(q => q.id === id);
+            if (quote) quote.status = quote.status === 'pending' ? 'completed' : 'pending';
+            saveToLocalStorage();
+            renderQuotes();
+        }
+
+        function updateContractStatus(id) {
+            const contract = workflows.contracts.find(c => c.id === id);
+            if (contract) contract.status = contract.status === 'pending' ? 'completed' : 'pending';
+            saveToLocalStorage();
+            renderContracts();
+        }
+
+        function updateReminderStatus(id) {
+            const reminder = workflows.reminders.find(r => r.id === id);
+            if (reminder) reminder.status = reminder.status === 'pending' ? 'completed' : 'pending';
+            saveToLocalStorage();
+            renderReminders();
+        }
+
+        function deleteQuote(id) {
+            workflows.quotes = workflows.quotes.filter(q => q.id !== id);
+            saveToLocalStorage();
+            renderQuotes();
+        }
+
+        function deleteContract(id) {
+            workflows.contracts = workflows.contracts.filter(c => c.id !== id);
+            saveToLocalStorage();
+            renderContracts();
+        }
+
+        function deleteReminder(id) {
+            workflows.reminders = workflows.reminders.filter(r => r.id !== id);
+            saveToLocalStorage();
+            renderReminders();
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('workflows', JSON.stringify(workflows));
+        }
+
+        function loadWorkflows() {
+            const saved = localStorage.getItem('workflows');
+            if (saved) {
+                workflows = JSON.parse(saved);
+                renderQuotes();
+                renderContracts();
+                renderReminders();
+            }
+        }
+
+        loadWorkflows();
+    </script>
+</body>
+</html>
